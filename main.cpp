@@ -22,7 +22,38 @@
 #define TEST_ITERATIONS 10
 #define POLL_TIME_S 5
 
-#if 1
+
+const char *example_data = 
+    "/ELL5" "\x5c" "253833635_A\r\n\r\n"
+    "0-0:1.0.0(210217184019W)\r\n"
+    "1-0:1.8.0(00006678.394*kWh)\r\n"
+    "1-0:2.8.0(00000000.000*kWh)\r\n"
+    "1-0:3.8.0(00000021.988*kvarh)\r\n"
+    "1-0:4.8.0(00001020.971*kvarh)\r\n"
+    "1-0:1.7.0(0001.727*kW)\r\n"
+    "1-0:2.7.0(0000.000*kW)\r\n"
+    "1-0:3.7.0(0000.000*kvar)\r\n"
+    "1-0:4.7.0(0000.309*kvar)\r\n"
+    "1-0:21.7.0(0001.023*kW)\r\n"
+    "1-0:41.7.0(0000.350*kW)\r\n"
+    "1-0:61.7.0(0000.353*kW)\r\n"
+    "1-0:22.7.0(0000.000*kW)\r\n"
+    "1-0:42.7.0(0000.000*kW)\r\n"
+    "1-0:62.7.0(0000.000*kW)\r\n"
+    "1-0:23.7.0(0000.000*kvar)\r\n"
+    "1-0:43.7.0(0000.000*kvar)\r\n"
+    "1-0:63.7.0(0000.000*kvar)\r\n"
+    "1-0:24.7.0(0000.009*kvar)\r\n"
+    "1-0:44.7.0(0000.161*kvar)\r\n"
+    "1-0:64.7.0(0000.138*kvar)\r\n"
+    "1-0:32.7.0(240.3*V)\r\n"
+    "1-0:52.7.0(240.1*V)\r\n"
+    "1-0:72.7.0(241.3*V)\r\n"
+    "1-0:31.7.0(004.2*A)\r\n"
+    "1-0:51.7.0(001.6*A)\r\n"
+    "1-0:71.7.0(001.7*A)\r\n!";
+
+#if 0
 static void dump_bytes(const uint8_t *bptr, uint32_t len) {
     unsigned int i = 0;
 
@@ -226,12 +257,19 @@ void run_tcp_client_test() {
 
 int main() 
 {
-    uint8_t test[2];
-    test[0] = 0x31;
+    
     crc16_t checksum;
     
     stdio_init_all();
     crc16_init();
+    int index = 0;
+    while (true) {
+        crc16_t checksum = crc16_fast((const uint8_t *)example_data, strlen(example_data));
+        printf("%d CRC of %s (%d bytes): 0x%04X\n", index ++, 
+            example_data, strlen(example_data), checksum);
+        sleep_ms(5000);
+    }
+    return 0;
 
     if (cyw43_arch_init()) {
         printf("WiFi init failed");
