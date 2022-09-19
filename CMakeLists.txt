@@ -39,8 +39,10 @@ add_executable(han)
 target_sources(han
     PRIVATE
     main.cpp
+    tcp_client.cpp
     ntp.cpp
     crc16.cpp
+    uart.cpp
 )
 
 target_compile_definitions(han
@@ -63,7 +65,7 @@ target_link_libraries(han
 
 )
 
-pico_enable_stdio_usb(han 1)
-pico_enable_stdio_uart(han 0)
+pico_enable_stdio_usb(han 0)
+pico_enable_stdio_uart(han 1)
 
 pico_add_extra_outputs(han)
