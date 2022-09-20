@@ -20,6 +20,7 @@
 
 #define UART_RX_PIN     5
 #define DREQ_PIN        2
+#define SERVER_HOSTNAME "docker.mikael.com"
 
 /*static void dns_lookup_done(const char *hostname, const ip_addr_t *ip, void *arg) {
 
@@ -53,6 +54,84 @@ err_t tcpClose(void *arg) {
     }
 
     return err;
+}
+
+#define BOUNDARY    "boundary"
+
+uint32_t tcp_send_post(void *arg)
+{
+    tcp_client_t *state = (tcp_client_t *)arg;
+    err_t err;
+
+    const char *body = (const char *)han_raw_buffer();
+    size_t bodyLen = strlen(body);
+    size_t msgLen = 30+30+25+65+15+55+bodyLen+20; // Aprox header + body length
+    char *msg = (char *)malloc(msgLen);
+
+    if (!msg) {
+        printf("Unable to allocate %d bytes for http post\n", msgLen);
+        return ERR_MEM;
+    }
+
+    const char *field1Header = "--" BOUNDARY "\r\n"
+        "Content-Disposition: form-data; name=\"data\"\r\n\r\n";
+    const char *field1Footer = "\r\n--" BOUNDARY "--\r\n";
+
+    strcpy (msg, "POST /api/han/raw HTTP/1.0\r\n");
+    strcat (msg, "Host: " SERVER_HOSTNAME "\r\n");
+    strcat (msg, "Content-Type: multipart/form-data;boundary=\"" BOUNDARY "\"\r\n");
+    strcat (msg, "Content-Length: ");
+    size_t contentLength = bodyLen + strlen(field1Header) + strlen(field1Footer);
+    itoa(contentLength, msg+strlen(msg), 10);
+    strcat (msg, "\r\n\r\n");
+    strcat (msg, field1Header);
+    strcat (msg, body);
+    strcat (msg, field1Footer);
+
+    puts(msg);
+
+    /*const char *httpHead = "POST /api/han/raw HTTP/1.0\r\n" 30
+        "Host: " SERVER_HOSTNAME "\r\n" 30
+        "Content-Length: xxx\r\n" 25
+        "Content-Type: multipart/form-data;boundary=\"boundary\"\r\n\r\n" 65
+        "--boundary\r\n" 15
+        "Content-Disposition: form-data; name=\"data\"\r\n\r\n"; 55
+    const char *boundaryEnd = "\r\n--boundary\r\n\r\n"; 20*/
+
+    if (tcp_sndbuf(state->tcp_pcb) <= strlen(msg)) {
+        printf("Out of memory in send buffer. No room for %d bytes http header in %d buffer\n", 
+            strlen(msg), tcp_sndbuf(state->tcp_pcb));
+        free(msg);
+        return ERR_MEM;
+    }
+
+    err = tcp_write(state->tcp_pcb, msg, strlen(msg), TCP_WRITE_FLAG_COPY);
+    if (err) {
+        printf("ERROR code %d (tcp_send_post::tcp_write httpHead", err);
+        free(msg);
+        return err;
+    }
+
+    /*err = tcp_write(state->tcp_pcb, msg, strlen(msg), TCP_WRITE_FLAG_COPY);
+    if (err) {
+        printf("ERROR code %d (tcp_send_post::tcp_write body", err);
+        return err;
+    }
+
+    err = tcp_write(state->tcp_pcb, boundaryEnd, strlen(boundaryEnd), TCP_WRITE_FLAG_COPY);
+    if (err) {
+        printf("ERROR code %d (tcp_send_post::tcp_write body", err);
+        return err;
+    }*/
+
+    puts("Flushing output buffer");
+    err = tcp_output(state->tcp_pcb);
+    free(msg);
+    if (err) {
+        printf("ERROR: Code: %d (tcp_send_packet :: tcp_output)\n", err);
+        return err;
+    }
+    return ERR_OK;
 }
 
 uint32_t tcp_send_packet(void *arg)
@@ -112,7 +191,8 @@ err_t tcpRecvCallback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
 err_t connectCallback(void *arg, struct tcp_pcb *tcp_pcb, err_t err) 
 {
     puts("Connection established");
-    tcp_send_packet(arg);
+    //tcp_send_packet(arg);
+    tcp_send_post(arg);
     return 0;
 }
 
@@ -135,6 +215,13 @@ int main()
     state->port = 80;
 
     stdio_init_all();
+
+    puts("Initializing UART");
+    gpio_init(DREQ_PIN);
+    gpio_set_dir(DREQ_PIN, GPIO_OUT);
+    gpio_put(DREQ_PIN, 0);
+    han_uart_init();
+
     puts("Testing connectivity");
     puts("Enabling WiFi");
     int error;
@@ -163,13 +250,23 @@ int main()
 
     tcp_err(state->tcp_pcb, tcpErrorHandler);
     tcp_recv(state->tcp_pcb, tcpRecvCallback);
-    tcp_sent(state->tcp_pcb, tcpSendCallback);
+    //tcp_sent(state->tcp_pcb, tcpSendCallback);
+
+    puts("Requesting HAN data");
+    gpio_put(DREQ_PIN, 1);
+    puts("Waiting for HAN data");
+    while (!han_data_available()) {
+        cyw43_arch_poll();
+        sleep_ms(1);
+    }
+    puts("Disabling DREQ");
 
     printf("Connecting to %s:%d\n", ipaddr_ntoa(&state->ip), state->port);
     cyw43_arch_lwip_begin();
     tcp_connect(state->tcp_pcb, &state->ip, state->port, connectCallback);
     cyw43_arch_lwip_end();
 
+    gpio_put(DREQ_PIN, 0);
     while (true) {
         cyw43_arch_poll();
         sleep_ms(1);

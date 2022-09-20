@@ -93,3 +93,14 @@ int han_copy_buffer(uint8_t *dst, size_t n)
     han_buffer_complete = false;
     return len;
 }
+
+const uint8_t *han_raw_buffer()
+{
+    return han_buffer;
+}
+
+void han_mark_buffer_read()
+{
+    han_buffer_complete = false;
+}
+
